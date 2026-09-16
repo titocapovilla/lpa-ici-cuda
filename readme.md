@@ -130,7 +130,7 @@ Introduces tiling by moving patches of the image to __shared__ memory for faster
 
 512x512 image, 16 directions, 7 scales, NVIDIA T4 on Google Colab.
 Times are the median of five runs of the directional loop.
-All versions produce the same image, PSNR 28.4983.
+All versions produce the same image, PSNR 25.0736.
 
 | Version | Time | Speedup |
 |---|---|---|
