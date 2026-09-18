@@ -2,6 +2,27 @@
 
 This repository contains the code for the implementation and CUDA acceleration of the LPA-ICI 2D algorithm (Local Polynomial Approximation - Intersection of Confidence Intervals) with anisotropic kernels.
 
+![Clean, noisy and denoised](data/barbara_clean_noisy_denoised.png)
+
+Noisy PSNR 22.1056, denoised PSNR 25.0736. The fastest GPU version is about 9900x faster than the naive CPU version.
+
+## Repository structure
+```
+├── src/            one file per version, see "Files and Implementations"
+│   ├── Timer.hpp       host timer (std::chrono)
+│   └── Timer_gpu.cu    device timer (CUDA events)
+├── kernels/        precomputed LPA kernel sets, see "Kernel files"
+├── data/           input images, the .hdr outputs are written here
+├── stb_image/      image loading and writing (nothings/stb)
+├── CMakeLists.txt
+└── build.sh
+```
+
+## Requirements
+- CMake 3.18 or newer
+- a C++17 compiler
+- optional: CUDA toolkit (nvcc) for the GPU versions
+
 ## Compilation
 The code is compiled via Cmake.
 Make sure you have CMake and a C++17 compiler installed.
@@ -13,6 +34,12 @@ the command
 ```
 executes the Cmake and builds the executables inside /build
 
+The CUDA code is compiled only for compute capability 7.5 (NVIDIA T4), set in `CMakeLists.txt`:
+```cmake
+set(CMAKE_CUDA_ARCHITECTURES 75)
+```
+If you use a different GPU, change 75 to the value of your card, or to `all`.
+
 ## Run
 From the repository root, run
 
@@ -23,7 +50,45 @@ From the repository root, run
 # CUDA version
 ./build/v0_0_lpa_ici_2D_naive_gpu
 ```
-or any of the other compiled versions.
+or any of the other compiled versions. The GPU executables have the `_gpu` suffix.
+
+Always run from the repository root, because the paths to the image and to the kernels are relative.
+
+## Configuration
+The input image, the kernel file and the output name are constants at the top of every source file:
+```cpp
+const std::string kernel_file_name = "kernels/lpa_kernels_m_1_0_d_16_h12_1_2_4_8_16_24_32_symmetric.txt";
+const std::string image_file_name = "data/barbara.png";
+const std::string output_img_name = "data/barbara_v4_1_lpa_ici_2D_sparse_shared_gpu.hdr";
+```
+To use a different image or kernel set, change them and build again.
+The noise seed (`noise_seed`) and the ICI threshold (`ici_gamma`) are defined in the same place.
+
+## Output
+Each run prints the PSNR of the noisy and of the denoised image and the execution time, and writes to `data/`:
+- `gray_image.hdr`: the clean gray image
+- `gray_image_noisy.hdr`: the noisy image
+- the denoised image, with the name set in `output_img_name`
+
+The .hdr files contain floating point values. Most standard image viewers do not open them; GIMP, ImageMagick or Python (`imageio`) can.
+
+## Kernel files
+The file names describe how the kernels were generated, for example `lpa_kernels_m_1_0_d_16_h12_1_2_4_8_16_24_32_symmetric.txt`:
+- `m_1_0`: polynomial order of the LPA along the two axes
+- `d_16`: number of directions
+- `h12_1_2_4_8_16_24_32`: the scales (window lengths)
+- `symmetric`, `gaussian`, `square`: window type
+
+All versions use the `symmetric` file with 16 directions and 7 scales.
+
+The file starts with the number of directions and of scales. Then, for every kernel, one line with rows and columns followed by the weights row by row:
+```
+16 7
+1 1
+1.000000
+3 3
+0.000000 0.000000 ...
+```
 
 
 
@@ -57,8 +122,6 @@ Because the stopping point depends on the noise and on the image content, the am
 The 16 directional estimates are combined into the final image as a weighted average with weight $`1/\text{variance}`$, so a direction that reached a larger kernel counts more.
 
 Finally the PSNR is computed against the clean image, and the result is written as .hdr, which is the only format stbi writes in floating point.
-
-![Clean, noisy and denoised](data/barbara_clean_noisy_denoised.png)
 
 ## Files and Implementations
 
@@ -130,6 +193,7 @@ Introduces tiling by moving patches of the image to __shared__ memory for faster
 
 512x512 image, 16 directions, 7 scales, NVIDIA T4 on Google Colab.
 Times are the median of five runs of the directional loop.
+The GPU timer starts after the image and the kernels are copied to the device, and stops after the denoised image is copied back to the host. File loading, noise generation and memory allocation are not included.
 All versions produce the same image, PSNR 25.0736.
 
 | Version | Time | Speedup |
@@ -152,6 +216,9 @@ The two CPU versions are single runs.
 
 
 
+
+## License
+See [LICENSE](LICENSE).
 
 ## References
 
