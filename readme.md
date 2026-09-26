@@ -198,19 +198,19 @@ All versions produce the same image, PSNR 25.0736.
 
 | Version | Time | Speedup |
 |---|---|---|
-| v0_0_lpa_ici_2D_naive.cpp | 57.4393 s | 1x |
-| v1_0_lpa_ici_2D_fused.cpp | 28.2776 s | 2x |
-| v0_0_lpa_ici_2D_naive.cu | 0.263951 s | 218x |
-| v0_1_lpa_ici_2D_naive_single_kernel_alloc.cu | 0.247642 s | 232x |
-| v1_0_lpa_ici_2D_fused.cu | 0.112544 s | 510x |
-| v1_1_lpa_ici_2D_fused_aggregation.cu | 0.103192 s | 557x |
-| v1_2_lpa_ici_2D_fused_aggregation_constant.cu | 0.080458 s | 714x |
-| v2_0_lpa_ici_2D_fused_streams.cu | 0.101345 s | 567x |
-| v3_0_lpa_ici_2D_fused_ac_sparse.cu | 0.009138 s | 6286x |
-| v3_0_2_lpa_ici_2D_fused_ac_sparse_coarsened.cu | 0.010851 s | 5294x |
-| v3_1_lpa_ici_2D_fused_ac_sparse_coalesced.cu | 0.009090 s | 6319x |
-| v4_0_lpa_ici_2D_sparse_scale_fused.cu | 0.007477 s | 7682x |
-| v4_1_lpa_ici_2D_sparse_shared.cu | 0.005800 s | 9903x |
+| v0_0_lpa_ici_2D_naive.cpp | 57.4393 s | 0.0046x |
+| v1_0_lpa_ici_2D_fused.cpp | 28.2776 s | 0.0093x |
+| v0_0_lpa_ici_2D_naive.cu | 0.263951 s | 1x |
+| v0_1_lpa_ici_2D_naive_single_kernel_alloc.cu | 0.247642 s | 1.07x |
+| v1_0_lpa_ici_2D_fused.cu | 0.112544 s | 2.35x |
+| v1_1_lpa_ici_2D_fused_aggregation.cu | 0.103192 s | 2.56x |
+| v1_2_lpa_ici_2D_fused_aggregation_constant.cu | 0.080458 s | 3.28x |
+| v2_0_lpa_ici_2D_fused_streams.cu | 0.101345 s | 2.60x |
+| v3_0_lpa_ici_2D_fused_ac_sparse.cu | 0.009138 s | 28.9x |
+| v3_0_2_lpa_ici_2D_fused_ac_sparse_coarsened.cu | 0.010851 s | 24.3x |
+| v3_1_lpa_ici_2D_fused_ac_sparse_coalesced.cu | 0.009090 s | 29.0x |
+| v4_0_lpa_ici_2D_sparse_scale_fused.cu | 0.007477 s | 35.3x |
+| v4_1_lpa_ici_2D_sparse_shared.cu | 0.005800 s | 45.5x |
 
 The two CPU versions are single runs.
 
