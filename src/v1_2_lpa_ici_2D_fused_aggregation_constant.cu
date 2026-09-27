@@ -101,8 +101,9 @@ void load_LPA_kernels(const std::string &filename,
   * columns for each kernel.
   * @param num_dirs Number of kernel directions
   * @param num_scales Number of kernel scales 
+  * @return false if the file cannot be opened or is malformed
   */
-void load_LPA_kernels_standardized(const std::string &filename,
+bool load_LPA_kernels_standardized(const std::string &filename,
 								std::vector<float> &host_kernel_weights,
 								std::vector<int> &host_offsets,
 								std::vector<int> &host_rows,
@@ -333,8 +334,8 @@ int main(int argc, char** argv) {
     // reassign correct channel since we forced 1
     channels = 1;
     if (img_gray == NULL) {
-        std::cout << "Error in loading the image\n";
-        return 0;
+        std::cerr << "Error in loading the image " << cfg.image_file << "\n";
+        return 1;
     }
     std::cout << "Loaded image with a width of " << width << " px, a height of "
                         << height << " px and (imported) " << channels << " channels\n";
@@ -395,11 +396,14 @@ int main(int argc, char** argv) {
     //                 host_offsets,
     //                 host_rows, host_cols,
     //                 num_dirs, num_scales);
-    load_LPA_kernels_standardized(cfg.kernel_file,
+    if (!load_LPA_kernels_standardized(cfg.kernel_file,
                                 host_kernel_weights,
                                 host_offsets,
                                 host_rows, host_cols,
-                                num_dirs, num_scales);
+                                num_dirs, num_scales)) {
+        stbi_image_free(img_gray);
+        return 1;
+    }
 
     int host_kernel_weights_size = host_kernel_weights.size();
     //flip kernels 180 to match python scipy.signal.convolve2d
@@ -524,7 +528,7 @@ void load_LPA_kernels(const std::string &filename,
     file.close();
 }
 
-void load_LPA_kernels_standardized(const std::string &filename,
+bool load_LPA_kernels_standardized(const std::string &filename,
                                     std::vector<float> &host_kernel_weights,
                                     std::vector<int> &host_offsets,
                                     std::vector<int> &host_rows,
@@ -533,10 +537,14 @@ void load_LPA_kernels_standardized(const std::string &filename,
     std::ifstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Failed to open " << filename << std::endl;
-        return;
+        return false;
     }
 
     file >> num_dirs >> num_scales;
+    if (!file || num_dirs <= 0 || num_scales <= 0) {
+        std::cerr << "Error: invalid header in " << filename << std::endl;
+        return false;
+    }
 
     int current_offset = 0;
 
@@ -549,12 +557,20 @@ void load_LPA_kernels_standardized(const std::string &filename,
 
             int file_rows, file_cols;
             file >> file_rows >> file_cols;
+            if (!file || file_rows <= 0 || file_cols <= 0) {
+                std::cerr << "Error: invalid size of kernel " << d << ", " << s << " in " << filename << std::endl;
+                return false;
+            }
 
             // Save the entire matrix into a temporary buffer
             int file_elements = file_rows * file_cols;
             std::vector<float> temp_buffer(file_elements);
             for (int i = 0; i < file_elements; ++i) {
                 file >> temp_buffer[i];
+            }
+            if (!file) {
+                std::cerr << "Error: missing weights of kernel " << d << ", " << s << " in " << filename << std::endl;
+                return false;
             }
 
             // set the baseline target sizes at the first pass
@@ -575,7 +591,7 @@ void load_LPA_kernels_standardized(const std::string &filename,
             if (row_offset < 0 || col_offset < 0) {
                 std::cerr << "Error: Matrix at direction " << d << ", scale " << s 
                           << " is too small to crop to the target size!" << std::endl;
-                return; 
+                return false; 
             }
 
             host_offsets.push_back(current_offset);
@@ -596,6 +612,7 @@ void load_LPA_kernels_standardized(const std::string &filename,
         }
     }
     file.close();
+    return true;
 }
 
 void flip_kernels(std::vector<float>& host_kernel_weights,
