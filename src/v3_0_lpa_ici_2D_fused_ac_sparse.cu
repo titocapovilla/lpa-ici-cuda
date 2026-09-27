@@ -11,6 +11,7 @@
 #include <math.h>
 
 #include "Timer.hpp"
+#include "Config.hpp"
 #include "Timer_gpu.cu"
 
 // This macro tells the header to actually compile the implementation code
@@ -42,14 +43,6 @@
 #define MAX_SPARSE_WEIGHTS 8192
 #define MAX_SPARSE_RUNS 1536
 #define MAX_SPARSE_KERNELS 128
-
-// --- Configuration ---
-const std::string kernel_file_name = "kernels/lpa_kernels_m_1_0_d_16_h12_1_2_4_8_16_24_32_symmetric.txt"; // change file name if using different kernels
-const std::string image_file_name = "data/barbara.png"; // change image file name
-const std::string output_img_name = "data/barbara_v3_0_lpa_ici_2D_fused_ac_sparse_gpu.hdr"; //change the processed image output. leave .hdr if using the related stbi function
-const float sigma_noise = 20.0f/255.0f; // noise standard deviation
-const unsigned int noise_seed = 20250910u; // fixed PRNG seed. Change to random for different results across runs
-const float ici_gamma = 2.0f; //parameter for the confidence intervals in the ICI rule
 
 // --- CUDA Execution Configuration ---
 const int BLOCK_2D_X = 16;        // block width  (16x16 = 256 threads for convolution)
@@ -254,8 +247,9 @@ void manual_RGB_to_gray(float *img, int width, int height, int channels);
   * @param img_noisy Pointer to a clean copy of the original image data, this will be corrupted by noise.
   * @param img_size width * height * channels(1).
   * @param sigma_noise The desired standard deviation of the noise.
+  * @param noise_seed Seed of the PRNG.
   */
-void create_noisy_image(float* img_clean, float* img_noisy, int img_size, float sigma_noise);
+void create_noisy_image(float* img_clean, float* img_noisy, int img_size, float sigma_noise, unsigned int noise_seed);
 
 /**
   * @brief Calculates PSNR
@@ -365,7 +359,9 @@ __global__ void normalize_estimate_kernel(float* d_img_denoised, float* d_global
 
 // --- MAIN ----
 
-int main() {
+int main(int argc, char** argv) {
+
+    Config cfg = parse_args(argc, argv, "v3_0_lpa_ici_2D_fused_ac_sparse_gpu");
 
     // --- IMAGE LOADING and RGB->WB CONVERSION ---
 
@@ -373,7 +369,7 @@ int main() {
 
     // stb_image internally converts the image to grayscale using the standard
     // perceptual luminance formula: Y = 0.299*R + 0.587*G + 0.114*B
-    float *img_gray = stbi_loadf(image_file_name.c_str(), &width, &height, &channels, 1);
+    float *img_gray = stbi_loadf(cfg.image_file.c_str(), &width, &height, &channels, 1);
     // reassign correct channel since we forced 1
     channels = 1;
     if (img_gray == NULL) {
@@ -384,8 +380,9 @@ int main() {
                         << height << " px and (imported) " << channels << " channels\n";
 
 	//write the imported image for checking. hdr is the only format that supports writing floats via stbi
-	std::cout << "Saving gray image as data/gray_image.hdr " << "\n";
-    stbi_write_hdr("data/gray_image.hdr", width, height, channels, img_gray);
+	std::string gray_image_file = sibling_path(cfg.output_file, "gray_image.hdr");
+	std::cout << "Saving gray image as " << gray_image_file << "\n";
+    stbi_write_hdr(gray_image_file.c_str(), width, height, channels, img_gray);
 
     // if you want to load RGB and convert to gray manually uncomment below
     // float *img_rgb = stbi_loadf("data/Lena512rgb.png", &width, &height, &channels, 0);
@@ -406,10 +403,11 @@ int main() {
     //or
     //float *host_img_gray_noisy = new float[img_size];
 
-    create_noisy_image(img_gray, host_img_gray_noisy.data(), img_size, sigma_noise);
+    create_noisy_image(img_gray, host_img_gray_noisy.data(), img_size, cfg.sigma_noise, cfg.noise_seed);
     //save the noisy image for checking
-    std::cout << "Saving noisy gray image as data/gray_image_noisy.hdr " << "\n";
-    stbi_write_hdr("data/gray_image_noisy.hdr", width, height, channels, host_img_gray_noisy.data());
+    std::string gray_image_noisy_file = sibling_path(cfg.output_file, "gray_image_noisy.hdr");
+    std::cout << "Saving noisy gray image as " << gray_image_noisy_file << "\n";
+    stbi_write_hdr(gray_image_noisy_file.c_str(), width, height, channels, host_img_gray_noisy.data());
 
 
     // -- CALCULATE PSNR ---
@@ -437,7 +435,7 @@ int main() {
     //                 host_offsets,
     //                 host_rows, host_cols,
     //                 num_dirs, num_scales);
-    load_LPA_kernels_standardized(kernel_file_name,
+    load_LPA_kernels_standardized(cfg.kernel_file,
                                 host_kernel_weights,
                                 host_offsets,
                                 host_rows, host_cols,
@@ -461,7 +459,7 @@ int main() {
                                     host_rows,
                                     host_cols,
                                     kernel_variances,
-                                    sigma_noise);
+                                    cfg.sigma_noise);
 
     
     
@@ -502,7 +500,7 @@ int main() {
                             host_rows.data(),
                             host_cols.data(),
                             kernel_variances.data(),
-                            ici_gamma);
+                            cfg.ici_gamma);
 
 
     std::cout << "Time taken for lpa function execution: " << t.elapsed() << " seconds\n";
@@ -514,8 +512,8 @@ int main() {
     std::cout << "Calculated PSNR of img_denoised: " << psnr_denoised << "\n";
                             
     // --- SAVE RESULTS ---
-    std::cout << "Saving denoised image as "<< output_img_name.c_str() << "\n";
-    stbi_write_hdr(output_img_name.c_str(), width, height, channels, host_img_denoised.data());
+    std::cout << "Saving denoised image as "<< cfg.output_file.c_str() << "\n";
+    stbi_write_hdr(cfg.output_file.c_str(), width, height, channels, host_img_denoised.data());
     
 
 
@@ -943,7 +941,7 @@ void manual_RGB_to_gray(float *img, int width, int height, int channels) {
     }
 }
 
-void create_noisy_image(float* img_clean, float* img_noisy, int img_size, float sigma_noise){
+void create_noisy_image(float* img_clean, float* img_noisy, int img_size, float sigma_noise, unsigned int noise_seed){
     
     // Mersenne twister PRNG, initialized with a fixed seed.
     std::mt19937 gen{noise_seed};
@@ -1134,6 +1132,15 @@ void anisotropic_lpa_ici_gpu_fused(float* host_img_noisy, float* host_img_denois
     build_sparse_kernels(host_kernel_weights, host_offsets, host_rows, host_cols, num_kernels,
                             weights, run_row, run_col, run_len,
                             kernel_first_run, kernel_num_runs, kernel_first_weight);
+
+    //the kernel set must fit the constant memory arrays
+    if (weights.size() > MAX_SPARSE_WEIGHTS || run_row.size() > MAX_SPARSE_RUNS || num_kernels > MAX_SPARSE_KERNELS) {
+        std::cerr << "Error: kernel set too large for constant memory: "
+                  << weights.size() << "/" << MAX_SPARSE_WEIGHTS << " weights, "
+                  << run_row.size() << "/" << MAX_SPARSE_RUNS << " runs, "
+                  << num_kernels << "/" << MAX_SPARSE_KERNELS << " kernels\n";
+        exit(EXIT_FAILURE);
+    }
 
 
 

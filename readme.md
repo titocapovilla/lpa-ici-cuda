@@ -9,6 +9,7 @@ Noisy PSNR 22.1056, denoised PSNR 25.0736. The fastest GPU version is about 9900
 ## Repository structure
 ```
 ├── src/            one file per version, see "Files and Implementations"
+│   ├── Config.hpp      command line options, shared by all versions
 │   ├── Timer.hpp       host timer (std::chrono)
 │   └── Timer_gpu.cu    device timer (CUDA events)
 ├── kernels/        precomputed LPA kernel sets, see "Kernel files"
@@ -52,23 +53,33 @@ From the repository root, run
 ```
 or any of the other compiled versions. The GPU executables have the `_gpu` suffix.
 
-Always run from the repository root, because the paths to the image and to the kernels are relative.
+Without options every version denoises `data/barbara.png` with the settings used for the results below.
+The default paths to the image and to the kernels are relative, so run from the repository root or pass the paths explicitly.
 
 ## Configuration
-The input image, the kernel file and the output name are constants at the top of every source file:
-```cpp
-const std::string kernel_file_name = "kernels/lpa_kernels_m_1_0_d_16_h12_1_2_4_8_16_24_32_symmetric.txt";
-const std::string image_file_name = "data/barbara.png";
-const std::string output_img_name = "data/barbara_v4_1_lpa_ici_2D_sparse_shared_gpu.hdr";
+The input and the parameters are set from the command line, no recompilation is needed:
 ```
-To use a different image or kernel set, change them and build again.
-The noise seed (`noise_seed`) and the ICI threshold (`ici_gamma`) are defined in the same place.
+-i, --image <file>     input image (default data/barbara.png)
+-k, --kernels <file>   LPA kernel file (default kernels/lpa_kernels_m_1_0_d_16_h12_1_2_4_8_16_24_32_symmetric.txt)
+-o, --output <file>    denoised .hdr output (default <image dir>/<image name>_<version>.hdr)
+-s, --sigma <value>    noise standard deviation on the 0-255 scale (default 20)
+-g, --gamma <value>    ICI threshold (default 2)
+    --seed <value>     noise seed (default 20250910)
+-h, --help             show the options
+```
+For example
+```bash
+./build/v4_1_lpa_ici_2D_sparse_shared_gpu -i data/cameraman.png -s 25 -g 1.5
+```
+
+The GPU versions keep the kernels in constant memory and v4_1 also in a shared memory tile, both with a fixed size.
+If a kernel file does not fit, the program stops with an error that shows the limit.
 
 ## Output
-Each run prints the PSNR of the noisy and of the denoised image and the execution time, and writes to `data/`:
+Each run prints the PSNR of the noisy and of the denoised image and the execution time, and writes in the directory of the output file:
 - `gray_image.hdr`: the clean gray image
 - `gray_image_noisy.hdr`: the noisy image
-- the denoised image, with the name set in `output_img_name`
+- the denoised image, named as set by `-o`
 
 The .hdr files contain floating point values. Most standard image viewers do not open them; GIMP, ImageMagick or Python (`imageio`) can.
 
